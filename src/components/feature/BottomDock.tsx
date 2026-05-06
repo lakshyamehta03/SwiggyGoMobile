@@ -1,42 +1,93 @@
-import { View, Pressable } from '@/src/tw';
+import { View, Pressable, StyleSheet } from 'react-native';
 import { Camera, Image as ImageIcon, Clock } from 'lucide-react-native';
-import { BlurView } from 'expo-blur';
-import { cssInterop } from 'nativewind';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-// NativeWind v4: register BlurView for className support
-cssInterop(BlurView, { className: 'style' });
 
 interface BottomDockProps {
   onCameraClick?: () => void;
 }
 
+/**
+ * BottomDock with truly circular buttons.
+ *
+ * Uses solid rgba backgrounds instead of BlurView to fix the
+ * rectangular clipping artifact on Android. borderCurve: continuous
+ * for smooth iOS corners per skills.
+ */
 export function BottomDock({ onCameraClick }: BottomDockProps) {
   const insets = useSafeAreaInsets();
 
   return (
-    <View 
-      className="absolute bottom-0 left-0 right-0 z-50 flex-row items-center justify-center gap-8 px-4"
-      style={{ paddingBottom: Math.max(insets.bottom + 16, 32) }}
+    <View
+      style={[
+        styles.container,
+        { paddingBottom: Math.max(insets.bottom + 12, 28) },
+      ]}
     >
-      <Pressable className="w-14 h-14 rounded-full overflow-hidden shadow-lg">
-        <BlurView intensity={60} tint="light" className="flex-1 items-center justify-center border border-white/60 bg-white/40">
-          <ImageIcon size={24} color="#1f2937" />
-        </BlurView>
+      {/* Gallery */}
+      <Pressable style={styles.sideButton}>
+        <ImageIcon size={22} color="#ffffff" />
       </Pressable>
 
-      <Pressable
-        onPress={onCameraClick}
-        className="w-20 h-20 rounded-full flex items-center justify-center bg-white border-[4px] border-white/60 shadow-2xl active:scale-95"
-      >
-        <Camera size={36} color="#1f2937" />
+      {/* Main capture button */}
+      <Pressable onPress={onCameraClick} style={styles.captureButton}>
+        <View style={styles.captureInner}>
+          <Camera size={30} color="#1f2937" />
+        </View>
       </Pressable>
 
-      <Pressable className="w-14 h-14 rounded-full overflow-hidden shadow-lg">
-        <BlurView intensity={60} tint="light" className="flex-1 items-center justify-center border border-white/60 bg-white/40">
-          <Clock size={24} color="#1f2937" />
-        </BlurView>
+      {/* History */}
+      <Pressable style={styles.sideButton}>
+        <Clock size={22} color="#ffffff" />
       </Pressable>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 28,
+    paddingHorizontal: 16,
+  },
+  sideButton: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderCurve: 'continuous',
+    overflow: 'hidden',
+  },
+  captureButton: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: 'rgba(255, 255, 255, 0.6)',
+    borderCurve: 'continuous',
+    overflow: 'hidden',
+  },
+  captureInner: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderCurve: 'continuous',
+    boxShadow: '0 2px 12px rgba(0,0,0,0.2)',
+  },
+});

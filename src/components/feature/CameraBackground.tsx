@@ -1,37 +1,113 @@
+import React, { forwardRef } from 'react';
 import { useCameraPermissions, CameraView } from 'expo-camera';
-import { View, Text, Pressable } from '@/src/tw';
-import { StyleSheet, Platform } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
+import Animated, { useAnimatedProps } from 'react-native-reanimated';
+import type { SharedValue } from 'react-native-reanimated';
 
-export function CameraBackground() {
-  const [permission, requestPermission] = useCameraPermissions();
+const AnimatedCameraView = Animated.createAnimatedComponent(CameraView);
 
-  if (!permission) {
-    return <View className="absolute inset-0 bg-black" />;
-  }
+export interface CameraBackgroundRef {
+  takePicture: () => Promise<string | null>;
+}
 
-  if (!permission.granted) {
+interface CameraBackgroundProps {
+  /** Reanimated shared value controlling zoom (0–1). Managed externally. */
+  zoom: SharedValue<number>;
+}
+
+/**
+ * Full-screen camera background.
+ *
+ * Zoom is controlled externally via the `zoom` SharedValue prop.
+ * Both pinch gestures (index.tsx) and the slider (ScanOverlay)
+ * write to the same SharedValue — this component just reads it.
+ *
+ * Exposes takePicture() via imperative handle.
+ */
+export const CameraBackground = forwardRef<CameraBackgroundRef, CameraBackgroundProps>(
+  function CameraBackground({ zoom }, ref) {
+    const [permission, requestPermission] = useCameraPermissions();
+    const cameraRef = React.useRef<CameraView>(null);
+
+    React.useImperativeHandle(ref, () => ({
+      takePicture: async () => {
+        if (!cameraRef.current) return null;
+        try {
+          const photo = await cameraRef.current.takePictureAsync({
+            quality: 0.7,
+            skipProcessing: true,
+          });
+          return photo?.uri ?? null;
+        } catch (e) {
+          console.warn('CameraBackground.takePicture failed:', e);
+          return null;
+        }
+      },
+    }));
+
+    const animatedProps = useAnimatedProps(() => ({
+      zoom: zoom.value,
+    }));
+
+    if (!permission) {
+      return <View style={[StyleSheet.absoluteFill, { backgroundColor: 'black' }]} />;
+    }
+
+    if (!permission.granted) {
+      return (
+        <View style={styles.permissionContainer}>
+          <Text style={styles.permissionText}>
+            Camera access is needed to scan restaurants and products
+          </Text>
+          <Pressable onPress={requestPermission} style={styles.permissionButton}>
+            <Text style={styles.permissionButtonText}>Grant Permission</Text>
+          </Pressable>
+        </View>
+      );
+    }
+
     return (
-      <View className="absolute inset-0 bg-black items-center justify-center p-6">
-        <Text className="text-white text-center mb-4 text-lg">
-          We need your permission to show the camera
-        </Text>
-        <Pressable
-          onPress={requestPermission}
-          className="bg-primary px-6 py-3 rounded-full"
-        >
-          <Text className="text-white font-semibold">Grant Permission</Text>
-        </Pressable>
+      <View style={StyleSheet.absoluteFill}>
+        <AnimatedCameraView
+          ref={cameraRef}
+          style={StyleSheet.absoluteFill}
+          facing="back"
+          animatedProps={animatedProps}
+        />
+        {/* Subtle overlay for UI contrast */}
+        <View
+          style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.05)' }]}
+          pointerEvents="none"
+        />
       </View>
     );
   }
+);
 
-  // Fallback to black on web for now if expo-camera web support is flaky,
-  // but expo-camera does support web!
-  return (
-    <View className="absolute inset-0 bg-black">
-      <CameraView style={StyleSheet.absoluteFillObject} facing="back" />
-      {/* Light overlay for camera effect, similar to web */}
-      <View className="absolute inset-0 bg-white/10" pointerEvents="none" />
-    </View>
-  );
-}
+const styles = StyleSheet.create({
+  permissionContainer: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'black',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  permissionText: {
+    color: 'white',
+    textAlign: 'center',
+    marginBottom: 16,
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  permissionButton: {
+    backgroundColor: '#00D4AA',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 999,
+  },
+  permissionButtonText: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 15,
+  },
+});

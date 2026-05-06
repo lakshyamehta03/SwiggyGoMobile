@@ -1,58 +1,120 @@
-import { View, Text, Pressable } from '@/src/tw';
-import { Menu, Zap, Settings } from 'lucide-react-native';
-import { BlurView } from 'expo-blur';
-import { cssInterop } from 'nativewind';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { Menu, Settings } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-// NativeWind v4: register BlurView for className support
-cssInterop(BlurView, { className: 'style' });
 
 interface TopBarProps {
   mode: 'dineout' | 'instamart';
   onModeToggle: () => void;
 }
 
+/**
+ * TopBar — 3-column layout: Menu | Mode Pill | Settings
+ *
+ * - Zap button removed (no functionality)
+ * - Uses flexbox justifyContent: space-between for safe distribution
+ * - Left/right columns have fixed width for centering the pill
+ * - Safe area: paddingTop uses insets.top
+ * - All buttons use truly circular dark backgrounds (no BlurView)
+ */
 export function TopBar({ mode, onModeToggle }: TopBarProps) {
   const insets = useSafeAreaInsets();
-  
+
   return (
-    <View 
-      className="absolute left-4 right-4 z-50 flex-row items-center justify-between"
-      style={{ top: insets.top + 16 }}
+    <View
+      style={[
+        styles.container,
+        { top: Math.max(insets.top, 12) + 4 },
+      ]}
     >
-      <Pressable className="w-10 h-10 rounded-full overflow-hidden">
-        <BlurView intensity={60} tint="light" className="flex-1 items-center justify-center border border-white/60 bg-white/40">
-          <Menu size={20} color="#1f2937" />
-        </BlurView>
-      </Pressable>
-
-      <Pressable
-        onPress={onModeToggle}
-        className="rounded-full overflow-hidden"
-      >
-        <BlurView intensity={60} tint="light" className="px-6 py-2.5 flex-row items-center gap-3 border border-white/60 bg-white/40">
-          <Text className={`text-gray-800 ${mode === 'dineout' ? 'opacity-100 font-medium' : 'opacity-50'}`}>
-            🍽 Dineout
-          </Text>
-          <View className="w-[1px] h-4 bg-gray-300" />
-          <Text className={`text-gray-800 ${mode === 'instamart' ? 'opacity-100 font-medium' : 'opacity-50'}`}>
-            🛒 Instamart
-          </Text>
-        </BlurView>
-      </Pressable>
-
-      <View className="flex-row gap-2">
-        <Pressable className="w-10 h-10 rounded-full overflow-hidden">
-          <BlurView intensity={60} tint="light" className="flex-1 items-center justify-center border border-white/60 bg-white/40">
-            <Zap size={20} color="#1f2937" />
-          </BlurView>
+      {/* Left — Menu */}
+      <View style={styles.sideColumn}>
+        <Pressable style={styles.iconButton} hitSlop={6}>
+          <Menu size={20} color="#ffffff" />
         </Pressable>
-        <Pressable className="w-10 h-10 rounded-full overflow-hidden">
-          <BlurView intensity={60} tint="light" className="flex-1 items-center justify-center border border-white/60 bg-white/40">
-            <Settings size={20} color="#1f2937" />
-          </BlurView>
+      </View>
+
+      {/* Center — Mode toggle pill */}
+      <Pressable onPress={onModeToggle} style={styles.modePill}>
+        <Text
+          style={[
+            styles.modeText,
+            mode === 'dineout' ? styles.modeActive : styles.modeInactive,
+          ]}
+        >
+          🍽 Dineout
+        </Text>
+        <View style={styles.modeDivider} />
+        <Text
+          style={[
+            styles.modeText,
+            mode === 'instamart' ? styles.modeActive : styles.modeInactive,
+          ]}
+        >
+          🛒 Instamart
+        </Text>
+      </Pressable>
+
+      {/* Right — Settings */}
+      <View style={[styles.sideColumn, { alignItems: 'flex-end' }]}>
+        <Pressable style={styles.iconButton} hitSlop={6}>
+          <Settings size={18} color="#ffffff" />
         </Pressable>
       </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    zIndex: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sideColumn: {
+    width: 44,
+    alignItems: 'flex-start',
+  },
+  iconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    overflow: 'hidden',
+  },
+  modePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 24,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    overflow: 'hidden',
+  },
+  modeText: {
+    fontSize: 13,
+  },
+  modeActive: {
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+  modeInactive: {
+    color: 'rgba(255, 255, 255, 0.4)',
+    fontWeight: '400',
+  },
+  modeDivider: {
+    width: 1,
+    height: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+});
