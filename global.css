@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #f8f9fa;
+  --foreground: #1a1a2e;
+  --primary: #00D4AA;
+  --primary-foreground: #ffffff;
+  --secondary: #FF6B35;
+  --secondary-foreground: #ffffff;
+  --muted: rgba(255, 255, 255, 0.5);
+  --muted-foreground: #64748b;
+  --accent: #00D4AA;
+  --accent-foreground: #ffffff;
+  --destructive: #d4183d;
+  --destructive-foreground: #ffffff;
+  --border: rgba(255, 255, 255, 0.3);
+  --input: transparent;
+  --ring: rgba(0, 212, 170, 0.5);
+  --radius: 1rem;
+}
+
+.dark {
+  --background: #0A0A0A;
+  --foreground: #ffffff;
+  --primary: #00D4AA;
+  --primary-foreground: #ffffff;
+  --secondary: #FF6B35;
+  --secondary-foreground: #ffffff;
+  --muted: #1A1A1A;
+  --muted-foreground: #9A9A9A;
+  --accent: #00D4AA;
+  --accent-foreground: #ffffff;
+  --destructive: #d4183d;
+  --destructive-foreground: #ffffff;
+  --border: rgba(255, 255, 255, 0.12);
+  --input: #1A1A1A;
+  --ring: rgba(255, 255, 255, 0.5);
+}
