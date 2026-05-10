@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { router } from 'expo-router';
-import { ArrowLeft, MapPin, ShoppingBag, ChevronRight } from 'lucide-react-native';
+import { ArrowLeft, MapPin, ChevronRight, Info } from 'lucide-react-native';
+import * as Icons from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDetection } from '@/src/store/detection-store';
+import { getDetectionStrategy } from '@/src/config/detection-config';
 
 /**
  * Detection Results — native formSheet with snap detents.
@@ -20,9 +22,17 @@ import { useDetection } from '@/src/store/detection-store';
  * - Typography: 15px body, 13px secondary, 11px meta
  */
 export default function DetectionResultsScreen() {
-  const { state, selectResult, selectedResult, clear } = useDetection();
+  const { state, selectResult, clear, selectedProcessedResult } = useDetection();
   const insets = useSafeAreaInsets();
-  const { results } = state;
+  const { results, activeMode } = state;
+
+  const strategy = useMemo(() => 
+    activeMode ? getDetectionStrategy(activeMode) : null
+  , [activeMode]);
+
+  const activeConfig = useMemo(() => 
+    strategy?.getDisplayConfig()
+  , [strategy]);
 
   const handleClose = () => {
     clear();
@@ -53,18 +63,11 @@ export default function DetectionResultsScreen() {
     );
   }
 
-  const isRestaurant = (text: string) => {
-    const lower = text.toLowerCase();
-    return (
-      lower.includes('pizza') ||
-      lower.includes('cafe') ||
-      lower.includes('nation') ||
-      lower.includes('mcdonald') ||
-      lower.includes('subway') ||
-      lower.includes('haldiram') ||
-      lower.includes('hut') ||
-      lower.includes('domino')
-    );
+  const IconComponent = (props: { name: string; size?: number; color?: string }) => {
+    // Check if it's an emoji or a Lucide icon name
+    const LucideIcon = (Icons as any)[props.name.split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join('')];
+    if (LucideIcon) return <LucideIcon size={props.size ?? 20} color={props.color ?? '#333'} />;
+    return <Text style={{ fontSize: props.size ?? 20 }}>{props.name}</Text>;
   };
 
   return (
@@ -126,31 +129,35 @@ export default function DetectionResultsScreen() {
           { paddingBottom: Math.max(insets.bottom, 16) + 16 },
         ]}
       >
-        {selectedResult && (
+        {selectedProcessedResult && (
           <Animated.View entering={FadeInUp.duration(350)}>
             {/* Result card */}
             <View style={styles.resultCard}>
               <View style={styles.resultIconContainer}>
-                <Text style={{ fontSize: 28 }}>
-                  {isRestaurant(selectedResult.normalizedText) ? '🍽' : '📦'}
-                </Text>
+                <IconComponent name={activeConfig?.icon ?? '📦'} size={32} color={activeConfig?.themeColor} />
               </View>
 
-              <Text style={styles.resultName}>{selectedResult.normalizedText}</Text>
+              <Text style={styles.resultName}>{selectedProcessedResult.title}</Text>
+              {selectedProcessedResult.subtitle && (
+                <Text style={styles.resultSubtitle}>{selectedProcessedResult.subtitle}</Text>
+              )}
 
               {/* Confidence */}
               <View style={styles.confidenceRow}>
-                <Text style={styles.confidenceLabel}>Confidence</Text>
+                <Text style={styles.confidenceLabel}>Match Score</Text>
                 <View style={styles.confidenceTrack}>
                   <View
                     style={[
                       styles.confidenceFill,
-                      { width: `${selectedResult.confidence * 100}%` },
+                      { 
+                        width: `${selectedProcessedResult.detection.confidence * 100}%`,
+                        backgroundColor: activeConfig?.themeColor ?? '#00D4AA'
+                      },
                     ]}
                   />
                 </View>
                 <Text style={styles.confidenceValue}>
-                  {Math.round(selectedResult.confidence * 100)}%
+                  {Math.round(selectedProcessedResult.detection.confidence * 100)}%
                 </Text>
               </View>
 
@@ -161,8 +168,9 @@ export default function DetectionResultsScreen() {
                   <Text style={styles.metaText}>Camera scan</Text>
                 </View>
                 <View style={styles.metaChip}>
+                  <Info size={12} color="#6b7280" />
                   <Text style={styles.metaText}>
-                    {state.lastResponse?.metadata.processingTimeMs ?? 0}ms
+                    {activeConfig?.label ?? 'Detection'}
                   </Text>
                 </View>
                 <View style={styles.metaChip}>
@@ -176,32 +184,22 @@ export default function DetectionResultsScreen() {
             {/* Actions */}
             <Text style={styles.sectionTitle}>Quick Actions</Text>
 
-            <Pressable
-              style={styles.actionRow}
-              onPress={() => {
-                router.push(`/product/${encodeURIComponent(selectedResult.id)}` as any);
-              }}
-            >
-              <View style={[styles.actionIcon, { backgroundColor: '#e8faf5' }]}>
-                <ShoppingBag size={18} color="#00D4AA" />
-              </View>
-              <View style={styles.actionContent}>
-                <Text style={styles.actionTitle}>View on Swiggy</Text>
-                <Text style={styles.actionSubtitle}>Menu, prices, and reviews</Text>
-              </View>
-              <ChevronRight size={16} color="#d1d5db" />
-            </Pressable>
-
-            <Pressable style={styles.actionRow}>
-              <View style={[styles.actionIcon, { backgroundColor: '#fef3c7' }]}>
-                <MapPin size={18} color="#f59e0b" />
-              </View>
-              <View style={styles.actionContent}>
-                <Text style={styles.actionTitle}>Get Directions</Text>
-                <Text style={styles.actionSubtitle}>Open in Maps</Text>
-              </View>
-              <ChevronRight size={16} color="#d1d5db" />
-            </Pressable>
+            {strategy?.getQuickActions(selectedProcessedResult).map((action, idx) => (
+              <Pressable 
+                key={idx}
+                style={styles.actionRow}
+                onPress={() => action.onPress(selectedProcessedResult)}
+              >
+                <View style={[styles.actionIcon, { backgroundColor: action.backgroundColor ?? '#f3f4f6' }]}>
+                  <IconComponent name={action.icon} size={18} color={action.iconColor} />
+                </View>
+                <View style={styles.actionContent}>
+                  <Text style={styles.actionTitle}>{action.label}</Text>
+                  <Text style={styles.actionSubtitle}>{selectedProcessedResult.title}</Text>
+                </View>
+                <ChevronRight size={16} color="#d1d5db" />
+              </Pressable>
+            ))}
 
             {/* Timestamp */}
             <Text style={styles.timestamp}>
@@ -336,6 +334,13 @@ const styles = StyleSheet.create({
     color: '#111827',
     textAlign: 'center',
     letterSpacing: -0.3,
+  },
+  resultSubtitle: {
+    fontSize: 14,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginTop: -4,
+    marginBottom: 4,
   },
 
   // ─── Confidence ──────────────────────────────────────────────────

@@ -16,6 +16,12 @@ export const API_CONFIG = {
     startAuth: '/auth/start-auth',
     authStatus: (sessionId: string) => `/auth/status/${sessionId}`,
     me: '/auth/me',
+
+    // Instamart
+    instamartAddresses: '/instamart/addresses',
+    instamartSearch: '/instamart/search',
+    instamartCart: '/instamart/cart',
+    instamartAddToCart: '/instamart/cart/add',
   },
 
   /** Polling parameters per API handoff doc */

@@ -1,11 +1,16 @@
 import React, { createContext, useReducer, useCallback, useMemo } from 'react';
 import type { OCRDetection, OCRResponse } from '@/src/services/ocr';
+import type { ProcessedResult, ScanningMode } from '@/src/types/detection';
 
 // ─── State Shape ───────────────────────────────────────────────────────────────
 
 export interface DetectionState {
   /** All detected items from the latest OCR run */
   results: OCRDetection[];
+  /** Results after being enriched by a mode-specific strategy */
+  processedResults: ProcessedResult[];
+  /** The mode that was active during the last detection */
+  activeMode: ScanningMode | null;
   /** Index of the currently selected result */
   selectedIndex: number;
   /** Whether an OCR operation is in progress */
@@ -18,6 +23,8 @@ export interface DetectionState {
 
 const initialState: DetectionState = {
   results: [],
+  processedResults: [],
+  activeMode: null,
   selectedIndex: 0,
   isProcessing: false,
   lastResponse: null,
@@ -28,7 +35,7 @@ const initialState: DetectionState = {
 
 type DetectionAction =
   | { type: 'SET_PROCESSING'; payload: boolean }
-  | { type: 'SET_RESULTS'; payload: OCRResponse }
+  | { type: 'SET_RESULTS'; payload: { response: OCRResponse; processed: ProcessedResult[]; mode: ScanningMode } }
   | { type: 'SET_ERROR'; payload: string }
   | { type: 'SELECT_RESULT'; payload: number }
   | { type: 'CLEAR' };
@@ -42,10 +49,12 @@ function detectionReducer(state: DetectionState, action: DetectionAction): Detec
       return {
         ...state,
         isProcessing: false,
-        results: action.payload.detections,
-        lastResponse: action.payload,
+        results: action.payload.response.detections,
+        processedResults: action.payload.processed,
+        activeMode: action.payload.mode,
+        lastResponse: action.payload.response,
         selectedIndex: 0,
-        error: action.payload.success ? null : (action.payload.error ?? 'Unknown error'),
+        error: action.payload.response.success ? null : (action.payload.response.error ?? 'Unknown error'),
       };
 
     case 'SET_ERROR':
@@ -71,16 +80,18 @@ interface DetectionContextValue {
   state: DetectionState;
   /** Start processing indicator */
   setProcessing: (processing: boolean) => void;
-  /** Store OCR results from any provider */
-  setResults: (response: OCRResponse) => void;
+  /** Store OCR results and their processed/mode-specific versions */
+  setResults: (response: OCRResponse, processed: ProcessedResult[], mode: ScanningMode) => void;
   /** Store an error message */
   setError: (error: string) => void;
   /** Select a specific detection result by index */
   selectResult: (index: number) => void;
   /** Clear all detection state */
   clear: () => void;
-  /** Convenience: the currently selected detection (or null) */
+  /** Convenience: the currently selected detection (raw) */
   selectedResult: OCRDetection | null;
+  /** Convenience: the currently selected processed result */
+  selectedProcessedResult: ProcessedResult | null;
 }
 
 const DetectionContext = createContext<DetectionContextValue | null>(null);
@@ -94,8 +105,8 @@ export function DetectionProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'SET_PROCESSING', payload: processing });
   }, []);
 
-  const setResults = useCallback((response: OCRResponse) => {
-    dispatch({ type: 'SET_RESULTS', payload: response });
+  const setResults = useCallback((response: OCRResponse, processed: ProcessedResult[], mode: ScanningMode) => {
+    dispatch({ type: 'SET_RESULTS', payload: { response, processed, mode } });
   }, []);
 
   const setError = useCallback((error: string) => {
@@ -115,6 +126,11 @@ export function DetectionProvider({ children }: { children: React.ReactNode }) {
     [state.results, state.selectedIndex]
   );
 
+  const selectedProcessedResult = useMemo(
+    () => state.processedResults[state.selectedIndex] ?? null,
+    [state.processedResults, state.selectedIndex]
+  );
+
   const value = useMemo<DetectionContextValue>(
     () => ({
       state,
@@ -124,8 +140,9 @@ export function DetectionProvider({ children }: { children: React.ReactNode }) {
       selectResult,
       clear,
       selectedResult,
+      selectedProcessedResult,
     }),
-    [state, setProcessing, setResults, setError, selectResult, clear, selectedResult]
+    [state, setProcessing, setResults, setError, selectResult, clear, selectedResult, selectedProcessedResult]
   );
 
   return (

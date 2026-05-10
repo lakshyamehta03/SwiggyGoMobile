@@ -1,5 +1,6 @@
 import { CameraRefProvider } from '@/src/hooks/useCameraRef';
 import { AuthProvider, useAuth } from '@/src/store/auth-store';
+import { InstamartProvider } from '@/src/store/instamart-store';
 import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -70,9 +71,11 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
-        <CameraRefProvider>
-          <RootNavigator />
-        </CameraRefProvider>
+        <InstamartProvider>
+          <CameraRefProvider>
+            <RootNavigator />
+          </CameraRefProvider>
+        </InstamartProvider>
       </AuthProvider>
     </GestureHandlerRootView>
   );

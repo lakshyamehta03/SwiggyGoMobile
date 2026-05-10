@@ -8,22 +8,37 @@ import { router } from 'expo-router';
 import { TopBar } from '@/src/components/feature/TopBar';
 import { BottomDock } from '@/src/components/feature/BottomDock';
 import { ScanOverlay } from '@/src/components/feature/ScanOverlay';
-import { useDetection } from '@/src/store/detection-store';
-import { OCRServiceFactory } from '@/src/services/ocr';
+import { ScanningMode } from '@/src/types/detection';
+import { ENABLED_MODES, getDetectionStrategy } from '@/src/config/detection-config';
 import { useCameraRef, useCameraZoom } from '@/src/hooks/useCameraRef';
+import { useDetection } from '@/src/store/detection-store';
+import { useInstamart } from '@/src/store/instamart-store';
+import { OCRServiceFactory } from '@/src/services/ocr';
 
 const ZOOM_MAX = 0.5;
 
 export default function CameraIdleScreen() {
-  const [mode, setMode] = useState<'dineout' | 'instamart'>('dineout');
+  const [mode, setMode] = useState<ScanningMode>(ScanningMode.INSTAMART);
   const [showHint, setShowHint] = useState(true);
   const { state, setProcessing, setResults, setError } = useDetection();
+  const { state: instamartState } = useInstamart();
   const cameraRef = useCameraRef();
   const zoom = useCameraZoom();
 
   // Pinch-to-zoom: save the zoom level at gesture start,
   // then scale relative to that base
   const pinchBase = useSharedValue(0);
+
+  const activeConfig = getDetectionStrategy(mode).getDisplayConfig();
+
+  const handleModeToggle = useCallback(() => {
+    if (ENABLED_MODES.length < 2) return;
+    setMode((prev) => {
+      const currentIndex = ENABLED_MODES.indexOf(prev);
+      const nextIndex = (currentIndex + 1) % ENABLED_MODES.length;
+      return ENABLED_MODES[nextIndex];
+    });
+  }, []);
 
   const pinchGesture = Gesture.Pinch()
     .onStart(() => {
@@ -45,21 +60,31 @@ export default function CameraIdleScreen() {
     setProcessing(true);
 
     try {
+      // 1. Capture Image
       const imageUri = await cameraRef.current?.takePicture();
       const uri = imageUri ?? `mock://capture_${Date.now()}`;
 
+      // 2. Perform OCR
       const ocrService = OCRServiceFactory.create('mock');
-      const response = await ocrService.recognizeText({ imageUri: uri });
+      const ocrResponse = await ocrService.recognizeText({ imageUri: uri });
 
-      setResults(response);
+      // 3. Execute Mode Strategy (API Enrichment)
+      const strategy = getDetectionStrategy(mode);
+      const processedResults = await strategy.process(ocrResponse, {
+        addressId: instamartState.selectedAddressId ?? undefined,
+      });
 
-      if (response.success && response.detections.length > 0) {
+      // 4. Update Global State
+      setResults(ocrResponse, processedResults, mode);
+
+      // 5. Navigate if results found
+      if (ocrResponse.success && processedResults.length > 0) {
         router.push('/detection-results' as any);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'OCR failed');
+      setError(err instanceof Error ? err.message : 'Processing failed');
     }
-  }, [state.isProcessing, cameraRef, setProcessing, setResults, setError]);
+  }, [state.isProcessing, cameraRef, mode, setProcessing, setResults, setError]);
 
   return (
     <GestureDetector gesture={pinchGesture}>
@@ -70,7 +95,7 @@ export default function CameraIdleScreen() {
         {/* Top bar */}
         <TopBar
           mode={mode}
-          onModeToggle={() => setMode((prev) => (prev === 'dineout' ? 'instamart' : 'dineout'))}
+          onModeToggle={handleModeToggle}
         />
 
         {/* Dismissible hint popup */}
@@ -84,8 +109,8 @@ export default function CameraIdleScreen() {
               <Pressable onPress={() => setShowHint(false)} style={styles.hintClose} hitSlop={8}>
                 <X size={14} color="#ffffff" />
               </Pressable>
-              <Text style={styles.hintTitle}>Point at a restaurant or product</Text>
-              <Text style={styles.hintSubtitle}>Works best in good lighting</Text>
+              <Text style={styles.hintTitle}>{activeConfig.hintTitle}</Text>
+              <Text style={styles.hintSubtitle}>{activeConfig.hintSubtitle}</Text>
             </View>
           </Animated.View>
         )}
@@ -99,7 +124,7 @@ export default function CameraIdleScreen() {
           >
             <View style={styles.processingPill}>
               <ActivityIndicator color="#00D4AA" size="small" />
-              <Text style={styles.processingText}>Scanning...</Text>
+              <Text style={styles.processingText}>{activeConfig.processingLabel}</Text>
             </View>
           </Animated.View>
         )}

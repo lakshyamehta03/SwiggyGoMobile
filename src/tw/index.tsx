@@ -13,6 +13,7 @@ export {
   Pressable,
   ScrollView,
   TextInput,
+  ActivityIndicator,
 } from "react-native";
 
 export type { ViewProps } from "react-native";
