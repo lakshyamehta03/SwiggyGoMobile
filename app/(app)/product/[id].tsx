@@ -1,6 +1,6 @@
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from '@/src/tw';
 import { ArrowLeft, Minus, Plus } from 'lucide-react-native';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDetection } from '@/src/store/detection-store';
@@ -11,7 +11,7 @@ import type { InstamartProduct } from '@/src/services/instamart';
 export default function ProductDetailScreen() {
   const { id } = useLocalSearchParams();
   const { selectedProcessedResult } = useDetection();
-  const { state: instamartState, setSelectedAddress, addItemToCart } = useInstamart();
+  const { state: instamartState, setSelectedAddress, addItemToCart, refreshAddresses, refreshCart } = useInstamart();
   const insets = useSafeAreaInsets();
 
   const product = selectedProcessedResult?.metadata?.product as InstamartProduct | undefined;
@@ -19,6 +19,15 @@ export default function ProductDetailScreen() {
   const [selectedVariantIndex, setSelectedVariantIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [showAddressDropdown, setShowAddressDropdown] = useState(false);
+
+  // ── Manual Triggers ─────────────────────────────────────────────
+  
+  // Refresh addresses when dropdown is opened
+  useEffect(() => {
+    if (showAddressDropdown) {
+      refreshAddresses();
+    }
+  }, [showAddressDropdown, refreshAddresses]);
 
   if (!product) {
     return (

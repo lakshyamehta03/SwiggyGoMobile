@@ -1,22 +1,17 @@
 /**
  * Auth Service — Public API
- *
- * Backend-driven OAuth flow (replaces old mock OTP approach).
- * Old mock files are preserved in implementations/ and factories/ for reference.
  */
 
-// API client (typed backend endpoints)
-export { startAuth, getAuthStatus, getMe, AuthApiError } from './api-client';
-export type {
-  StartAuthResponse,
-  AuthStatusResponse,
-  UserMeResponse,
-  AuthStatus,
-} from './api-client';
+// Types & Interfaces
+export * from './interfaces/types';
+export * from './interfaces/errors';
+export * from './interfaces/IAuthService';
+export * from './interfaces/ISecureStorage';
 
-// Polling engine
-export { pollAuthStatus, PollingTimeoutError, PollingAbortedError, PollingFailedError } from './polling';
+// Implementations (Singletons)
+export { authService } from './implementations/AuthService';
+export { secureStorage as SecureStorage } from './implementations/SecureStorage';
+
+// Polling
+export { pollAuthStatus } from './polling';
 export type { PollingResult } from './polling';
-
-// Secure storage
-export { SecureStorage } from './secure-storage';

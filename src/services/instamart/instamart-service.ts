@@ -45,9 +45,9 @@ export const instamartService = {
   /**
    * Get current cart status
    */
-  async fetchCart(): Promise<InstamartCart | null> {
+  async fetchCart(addressId?: string): Promise<InstamartCart | null> {
     try {
-      return await instamartClient.getCart();
+      return await instamartClient.getCart(addressId);
     } catch (error) {
       this.handleError(error, 'Failed to fetch cart');
       return null;

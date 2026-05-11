@@ -1,5 +1,5 @@
 import React, { createContext, useReducer, useCallback, useMemo, useEffect, useContext } from 'react';
-import * as SecureStore from 'expo-secure-store';
+import { secureStorage } from '@/src/services/auth/implementations/SecureStorage';
 import { instamartService } from '@/src/services/instamart';
 import type { DeliveryAddress, InstamartCart } from '@/src/services/instamart';
 import { useAuth } from './auth-store';
@@ -97,32 +97,34 @@ export function InstamartProvider({ children }: { children: React.ReactNode }) {
       
       // If no address selected, pick the first one
       if (!state.selectedAddressId && addresses.length > 0) {
-        const storedId = await SecureStore.getItemAsync(SELECTED_ADDRESS_ID_KEY);
+        const storedId = await secureStorage.getItem(SELECTED_ADDRESS_ID_KEY);
         const initialId = storedId && addresses.find(a => a.id === storedId) 
           ? storedId 
           : addresses[0].id;
         
         dispatch({ type: 'SET_SELECTED_ADDRESS', payload: initialId });
-        await SecureStore.setItemAsync(SELECTED_ADDRESS_ID_KEY, initialId);
+        await secureStorage.setItem(SELECTED_ADDRESS_ID_KEY, initialId);
       }
     }
   }, [state.selectedAddressId, wrapApiCall]);
 
   // ── Refresh Cart ─────────────────────────────────────────────────
-  const refreshCart = useCallback(async () => {
+  const refreshCart = useCallback(async (addressId?: string) => {
     dispatch({ type: 'SET_LOADING', payload: true });
-    const cart = await wrapApiCall(() => instamartService.fetchCart());
+    // Use provided addressId or fall back to state
+    const targetAddressId = addressId || state.selectedAddressId;
+    const cart = await wrapApiCall(() => instamartService.fetchCart(targetAddressId || undefined));
     if (cart !== undefined) {
       dispatch({ type: 'SET_CART', payload: cart });
     }
-  }, [wrapApiCall]);
+  }, [state.selectedAddressId, wrapApiCall]);
 
   // ── Set Selected Address ─────────────────────────────────────────
   const setSelectedAddress = useCallback(async (addressId: string) => {
     dispatch({ type: 'SET_SELECTED_ADDRESS', payload: addressId });
-    await SecureStore.setItemAsync(SELECTED_ADDRESS_ID_KEY, addressId);
+    await secureStorage.setItem(SELECTED_ADDRESS_ID_KEY, addressId);
     // Refresh cart because price/availability might change with address
-    await refreshCart();
+    await refreshCart(addressId);
   }, [refreshCart]);
 
   // ── Add Item to Cart ─────────────────────────────────────────────
@@ -141,15 +143,12 @@ export function InstamartProvider({ children }: { children: React.ReactNode }) {
     }
   }, [state.selectedAddressId, wrapApiCall]);
 
-  // ── Initial Load ─────────────────────────────────────────────────
+  // ── Initial Load: Only clear if not authenticated ──────────
   useEffect(() => {
-    if (authState.phase === 'authenticated') {
-      refreshAddresses();
-      refreshCart();
-    } else {
+    if (authState.phase !== 'authenticated') {
       dispatch({ type: 'CLEAR' });
     }
-  }, [authState.phase, refreshAddresses, refreshCart]);
+  }, [authState.phase]);
 
   // ── Computed: Selected Address Object ────────────────────────────
   const selectedAddress = useMemo(() => {

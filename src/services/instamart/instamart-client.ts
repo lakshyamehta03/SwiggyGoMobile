@@ -34,7 +34,7 @@ async function authenticatedFetch(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<Response> {
-  const token = await SecureStorage.getSessionToken();
+  const token = await SecureStorage.getBackendToken();
   
   const headers = {
     'Content-Type': 'application/json',
@@ -86,8 +86,11 @@ export const instamartClient = {
   /**
    * Fetch current cart and bill breakdown
    */
-  async getCart(): Promise<InstamartCart> {
-    const res = await authenticatedFetch(endpoints.instamartCart);
+  async getCart(addressId?: string): Promise<InstamartCart> {
+    const url = addressId 
+      ? `${endpoints.instamartCart}?addressId=${addressId}`
+      : endpoints.instamartCart;
+    const res = await authenticatedFetch(url);
     return res.json();
   },
 

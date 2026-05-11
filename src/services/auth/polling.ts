@@ -1,53 +1,20 @@
-/**
- * Exponential Backoff Polling Engine
- *
- * Polls GET /auth/status/:sessionId until:
- *   - AUTHENTICATED → returns sessionToken
- *   - FAILED → throws with error message
- *   - Timeout (maxAttempts) → throws timeout error
- *   - Aborted (AbortController) → throws abort error
- *
- * Parameters from API handoff doc:
- *   Initial: 2s, multiplier: 1.5×, max: 10s, ~50 attempts (~5-7 min)
- *
- * Network errors are retried without incrementing the attempt counter.
- */
-
 import { API_CONFIG } from '@/src/config/api-config';
-import { getAuthStatus, type AuthStatusResponse } from './api-client';
+import { authService } from './implementations/AuthService';
+import { PollingAbortedError, PollingFailedError, PollingTimeoutError } from './interfaces/errors';
+import { AuthStatusResponse } from './interfaces/types';
 
 export interface PollingResult {
-  sessionToken: string;
-}
-
-export class PollingTimeoutError extends Error {
-  constructor() {
-    super('Authentication timed out. Please try again.');
-    this.name = 'PollingTimeoutError';
-  }
-}
-
-export class PollingAbortedError extends Error {
-  constructor() {
-    super('Authentication was cancelled.');
-    this.name = 'PollingAbortedError';
-  }
-}
-
-export class PollingFailedError extends Error {
-  constructor(reason: string) {
-    super(reason);
-    this.name = 'PollingFailedError';
-  }
+  backendToken: string;
+  userId?: string;
 }
 
 /**
  * Start polling for auth completion.
  *
  * @param sessionId  - The sessionId from /auth/start-auth
- * @param signal     - AbortSignal to cancel polling (user taps "Cancel")
+ * @param signal     - AbortSignal to cancel polling
  * @param onTick     - Optional callback on each poll attempt (for UI progress)
- * @returns          - The sessionToken on success
+ * @returns          - The backend token and userId on success
  */
 export async function pollAuthStatus(
   sessionId: string,
@@ -56,44 +23,38 @@ export async function pollAuthStatus(
 ): Promise<PollingResult> {
   const { initialDelayMs, multiplier, maxDelayMs, maxAttempts } = API_CONFIG.polling;
 
-  let delay: number = initialDelayMs;
+  let delay = initialDelayMs;
   let attempts = 0;
 
   while (attempts < maxAttempts) {
-    // Check if cancelled
-    if (signal?.aborted) {
-      throw new PollingAbortedError();
-    }
+    if (signal?.aborted) throw new PollingAbortedError();
 
     try {
-      const response: AuthStatusResponse = await getAuthStatus(sessionId);
+      const response: AuthStatusResponse = await authService.getAuthStatus(sessionId);
 
-      if (response.status === 'AUTHENTICATED' && response.sessionToken) {
-        return { sessionToken: response.sessionToken };
+      if (response.status === 'AUTHENTICATED' && response.backendToken) {
+        return {
+          backendToken: response.backendToken,
+          userId: response.userId,
+        };
       }
 
       if (response.status === 'FAILED') {
         throw new PollingFailedError(response.error ?? 'Authentication denied');
       }
 
-      // PENDING — continue polling
+      // PENDING
       attempts++;
       onTick?.(attempts, maxAttempts);
 
     } catch (err) {
-      // Re-throw our own error types
-      if (
-        err instanceof PollingFailedError ||
-        err instanceof PollingAbortedError
-      ) {
+      if (err instanceof PollingFailedError || err instanceof PollingAbortedError) {
         throw err;
       }
-
-      // Network errors: retry without incrementing attempts
-      console.warn(`[Polling] Network error (attempt ${attempts}):`, err);
+      // Log and continue polling on network errors
+      console.warn(`[Polling] Attempt ${attempts} failed:`, err);
     }
 
-    // Wait with exponential backoff
     await sleep(delay, signal);
     delay = Math.min(delay * multiplier, maxDelayMs);
   }
@@ -101,16 +62,12 @@ export async function pollAuthStatus(
   throw new PollingTimeoutError();
 }
 
-/** Abortable sleep */
+/** Abortable sleep helper */
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(new PollingAbortedError());
-      return;
-    }
+    if (signal?.aborted) return reject(new PollingAbortedError());
 
     const timer = setTimeout(resolve, ms);
-
     signal?.addEventListener('abort', () => {
       clearTimeout(timer);
       reject(new PollingAbortedError());
