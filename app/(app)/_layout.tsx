@@ -1,4 +1,4 @@
-import { Stack } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
 import { View } from 'react-native';
 import { CameraBackground } from '@/src/components/feature/CameraBackground';
 import { useCameraContext } from '@/src/hooks/useCameraRef';

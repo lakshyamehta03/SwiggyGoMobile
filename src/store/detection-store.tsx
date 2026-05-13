@@ -63,7 +63,7 @@ function detectionReducer(state: DetectionState, action: DetectionAction): Detec
     case 'SELECT_RESULT':
       return {
         ...state,
-        selectedIndex: Math.max(0, Math.min(action.payload, state.results.length - 1)),
+        selectedIndex: Math.max(0, Math.min(action.payload, state.processedResults.length - 1)),
       };
 
     case 'CLEAR':

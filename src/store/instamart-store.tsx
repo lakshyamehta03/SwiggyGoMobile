@@ -62,7 +62,10 @@ interface InstamartContextValue {
   refreshAddresses: () => Promise<void>;
   refreshCart: () => Promise<void>;
   setSelectedAddress: (addressId: string) => Promise<void>;
-  addItemToCart: (spinId: string, quantity: number) => Promise<void>;
+  addItemToCart: (spinId: string, quantity: number) => Promise<boolean>;
+  updateItemQuantity: (spinId: string, quantity: number) => Promise<boolean>;
+  removeItem: (spinId: string) => Promise<boolean>;
+  clearError: () => void;
   selectedAddress: DeliveryAddress | null;
 }
 
@@ -88,6 +91,17 @@ export function InstamartProvider({ children }: { children: React.ReactNode }) {
     }
   }, [invalidateSession]);
 
+  // ── Refresh Cart ─────────────────────────────────────────────────
+  const refreshCart = useCallback(async (addressId?: string) => {
+    dispatch({ type: 'SET_LOADING', payload: true });
+    // Use provided addressId or fall back to state
+    const targetAddressId = addressId || state.selectedAddressId;
+    const cart = await wrapApiCall(() => instamartService.fetchCart(targetAddressId || undefined));
+    if (cart !== undefined) {
+      dispatch({ type: 'SET_CART', payload: cart });
+    }
+  }, [state.selectedAddressId, wrapApiCall]);
+
   // ── Refresh Addresses ────────────────────────────────────────────
   const refreshAddresses = useCallback(async () => {
     dispatch({ type: 'SET_LOADING', payload: true });
@@ -104,20 +118,15 @@ export function InstamartProvider({ children }: { children: React.ReactNode }) {
         
         dispatch({ type: 'SET_SELECTED_ADDRESS', payload: initialId });
         await secureStorage.setItem(SELECTED_ADDRESS_ID_KEY, initialId);
+        
+        // After setting initial address, refresh the cart for that address
+        await refreshCart(initialId);
+      } else if (state.selectedAddressId) {
+        // Even if we have a selected address, refresh it to be safe
+        await refreshCart(state.selectedAddressId);
       }
     }
-  }, [state.selectedAddressId, wrapApiCall]);
-
-  // ── Refresh Cart ─────────────────────────────────────────────────
-  const refreshCart = useCallback(async (addressId?: string) => {
-    dispatch({ type: 'SET_LOADING', payload: true });
-    // Use provided addressId or fall back to state
-    const targetAddressId = addressId || state.selectedAddressId;
-    const cart = await wrapApiCall(() => instamartService.fetchCart(targetAddressId || undefined));
-    if (cart !== undefined) {
-      dispatch({ type: 'SET_CART', payload: cart });
-    }
-  }, [state.selectedAddressId, wrapApiCall]);
+  }, [state.selectedAddressId, wrapApiCall, refreshCart]);
 
   // ── Set Selected Address ─────────────────────────────────────────
   const setSelectedAddress = useCallback(async (addressId: string) => {
@@ -140,15 +149,58 @@ export function InstamartProvider({ children }: { children: React.ReactNode }) {
     );
     if (updatedCart) {
       dispatch({ type: 'SET_CART', payload: updatedCart });
+      return true;
+    } else {
+      // Refresh to get actual availability if add fails
+      await refreshCart();
+      return false;
     }
-  }, [state.selectedAddressId, wrapApiCall]);
+  }, [state.selectedAddressId, wrapApiCall, refreshCart]);
+
+  // ── Update Item Quantity ─────────────────────────────────────────
+  const updateItemQuantity = useCallback(async (spinId: string, quantity: number) => {
+    if (!state.selectedAddressId || !state.cart) return false;
+
+    dispatch({ type: 'SET_LOADING', payload: true });
+    
+    // Construct new items list
+    const newItems = state.cart.items.map(item => ({
+      spinId: item.spinId,
+      quantity: item.spinId === spinId ? quantity : item.quantity
+    })).filter(item => item.quantity > 0);
+
+    const updatedCart = await wrapApiCall(() => 
+      instamartService.updateCart(newItems, state.selectedAddressId!)
+    );
+    
+    if (updatedCart) {
+      dispatch({ type: 'SET_CART', payload: updatedCart });
+      return true;
+    } else {
+      // If update fails (e.g., partial availability), refresh to get actual stock status
+      await refreshCart();
+      return false;
+    }
+  }, [state.selectedAddressId, state.cart, wrapApiCall, refreshCart]);
+
+  // ── Remove Item ──────────────────────────────────────────────────
+  const removeItem = useCallback(async (spinId: string) => {
+    return updateItemQuantity(spinId, 0);
+  }, [updateItemQuantity]);
+
+  const clearError = useCallback(() => {
+    dispatch({ type: 'SET_ERROR', payload: null });
+  }, []);
 
   // ── Initial Load: Only clear if not authenticated ──────────
   useEffect(() => {
     if (authState.phase !== 'authenticated') {
       dispatch({ type: 'CLEAR' });
+    } else {
+      // Start by loading addresses; it will cascade into cart refresh
+      refreshAddresses();
     }
-  }, [authState.phase]);
+  }, [authState.phase, refreshAddresses]);
 
   // ── Computed: Selected Address Object ────────────────────────────
   const selectedAddress = useMemo(() => {
@@ -161,8 +213,11 @@ export function InstamartProvider({ children }: { children: React.ReactNode }) {
     refreshCart,
     setSelectedAddress,
     addItemToCart,
+    updateItemQuantity,
+    removeItem,
+    clearError,
     selectedAddress,
-  }), [state, refreshAddresses, refreshCart, setSelectedAddress, addItemToCart, selectedAddress]);
+  }), [state, refreshAddresses, refreshCart, setSelectedAddress, addItemToCart, updateItemQuantity, removeItem, clearError, selectedAddress]);
 
   return (
     <InstamartContext.Provider value={value}>

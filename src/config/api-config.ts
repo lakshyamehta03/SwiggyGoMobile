@@ -22,6 +22,7 @@ export const API_CONFIG = {
     instamartSearch: '/instamart/search',
     instamartCart: '/instamart/cart',
     instamartAddToCart: '/instamart/cart/add',
+    instamartUpdateCart: '/instamart/cart/update',
   },
 
   /** Polling parameters per API handoff doc */

@@ -3,30 +3,25 @@ import { View, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-nati
 import Animated, { FadeIn, FadeOutDown, useSharedValue } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { X } from 'lucide-react-native';
-import { router } from 'expo-router';
 
 import { TopBar } from '@/src/components/feature/TopBar';
 import { BottomDock } from '@/src/components/feature/BottomDock';
 import { ScanOverlay } from '@/src/components/feature/ScanOverlay';
 import { ScanningMode } from '@/src/types/detection';
 import { ENABLED_MODES, getDetectionStrategy } from '@/src/config/detection-config';
-import { useCameraRef, useCameraZoom } from '@/src/hooks/useCameraRef';
+import { useCameraZoom } from '@/src/hooks/useCameraRef';
 import { useDetection } from '@/src/store/detection-store';
-import { useInstamart } from '@/src/store/instamart-store';
-import { OCRServiceFactory } from '@/src/services/ocr';
+import { useCapture } from '@/src/hooks/useCapture';
 
 const ZOOM_MAX = 0.5;
 
 export default function CameraIdleScreen() {
   const [mode, setMode] = useState<ScanningMode>(ScanningMode.INSTAMART);
   const [showHint, setShowHint] = useState(true);
-  const { state, setProcessing, setResults, setError } = useDetection();
-  const { state: instamartState } = useInstamart();
-  const cameraRef = useCameraRef();
+  const { state } = useDetection();
+  const { capture } = useCapture(mode);
   const zoom = useCameraZoom();
 
-  // Pinch-to-zoom: save the zoom level at gesture start,
-  // then scale relative to that base
   const pinchBase = useSharedValue(0);
 
   const activeConfig = getDetectionStrategy(mode).getDisplayConfig();
@@ -53,38 +48,6 @@ export default function CameraIdleScreen() {
       const newZoom = pinchBase.value + delta;
       zoom.value = Math.max(0, Math.min(ZOOM_MAX, newZoom));
     });
-
-  const handleCapture = useCallback(async () => {
-    if (state.isProcessing) return;
-
-    setProcessing(true);
-
-    try {
-      // 1. Capture Image
-      const imageUri = await cameraRef.current?.takePicture();
-      const uri = imageUri ?? `mock://capture_${Date.now()}`;
-
-      // 2. Perform OCR
-      const ocrService = OCRServiceFactory.create('mock');
-      const ocrResponse = await ocrService.recognizeText({ imageUri: uri });
-
-      // 3. Execute Mode Strategy (API Enrichment)
-      const strategy = getDetectionStrategy(mode);
-      const processedResults = await strategy.process(ocrResponse, {
-        addressId: instamartState.selectedAddressId ?? undefined,
-      });
-
-      // 4. Update Global State
-      setResults(ocrResponse, processedResults, mode);
-
-      // 5. Navigate if results found
-      if (ocrResponse.success && processedResults.length > 0) {
-        router.push('/detection-results' as any);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Processing failed');
-    }
-  }, [state.isProcessing, cameraRef, mode, setProcessing, setResults, setError]);
 
   return (
     <GestureDetector gesture={pinchGesture}>
@@ -143,7 +106,7 @@ export default function CameraIdleScreen() {
         )}
 
         {/* Bottom dock */}
-        <BottomDock onCameraClick={handleCapture} />
+        <BottomDock onCameraClick={capture} />
       </View>
     </GestureDetector>
   );

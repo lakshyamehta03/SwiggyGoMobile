@@ -34,6 +34,7 @@ export interface CartItem {
   quantity: number;
   price: number;
   mrp: number;
+  imageUrl?: string;
 }
 
 export interface BillLineItem {

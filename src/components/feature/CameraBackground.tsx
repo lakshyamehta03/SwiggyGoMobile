@@ -1,10 +1,12 @@
 import React, { forwardRef } from 'react';
 import { useCameraPermissions, CameraView } from 'expo-camera';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import Animated, { useAnimatedProps } from 'react-native-reanimated';
 import type { SharedValue } from 'react-native-reanimated';
 
-const AnimatedCameraView = Animated.createAnimatedComponent(CameraView);
+const AnimatedCameraView = Platform.OS !== 'web'
+  ? Animated.createAnimatedComponent(CameraView)
+  : null;
 
 export interface CameraBackgroundRef {
   takePicture: () => Promise<string | null>;
@@ -66,6 +68,22 @@ export const CameraBackground = forwardRef<CameraBackgroundRef, CameraBackground
       );
     }
 
+    const overlay = (
+      <View
+        style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.05)' }]}
+        pointerEvents="none"
+      />
+    );
+
+    if (Platform.OS === 'web' || !AnimatedCameraView) {
+      return (
+        <View style={StyleSheet.absoluteFill}>
+          <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
+          {overlay}
+        </View>
+      );
+    }
+
     return (
       <View style={StyleSheet.absoluteFill}>
         <AnimatedCameraView
@@ -74,11 +92,7 @@ export const CameraBackground = forwardRef<CameraBackgroundRef, CameraBackground
           facing="back"
           animatedProps={animatedProps}
         />
-        {/* Subtle overlay for UI contrast */}
-        <View
-          style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.05)' }]}
-          pointerEvents="none"
-        />
+        {overlay}
       </View>
     );
   }

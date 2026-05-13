@@ -1,17 +1,26 @@
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from '@/src/tw';
 import { ArrowLeft, Minus, Plus } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, Stack } from 'expo-router';
+import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDetection } from '@/src/store/detection-store';
 import { useInstamart } from '@/src/store/instamart-store';
 import { ChevronDown, MapPin, ShoppingBag } from 'lucide-react-native';
+import { Toast } from '@/src/components/common/Toast';
 import type { InstamartProduct } from '@/src/services/instamart';
 
 export default function ProductDetailScreen() {
   const { id } = useLocalSearchParams();
-  const { selectedProcessedResult } = useDetection();
-  const { state: instamartState, setSelectedAddress, addItemToCart, refreshAddresses, refreshCart } = useInstamart();
+  const { state, selectResult, selectedProcessedResult } = useDetection();
+  const { 
+    state: instamartState, 
+    setSelectedAddress, 
+    addItemToCart, 
+    refreshAddresses, 
+    refreshCart,
+    clearError 
+  } = useInstamart();
   const insets = useSafeAreaInsets();
 
   const product = selectedProcessedResult?.metadata?.product as InstamartProduct | undefined;
@@ -19,9 +28,21 @@ export default function ProductDetailScreen() {
   const [selectedVariantIndex, setSelectedVariantIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [showAddressDropdown, setShowAddressDropdown] = useState(false);
+  const [showToast, setShowToast] = useState(false);
+  
+  const variant = product?.variations[selectedVariantIndex];
 
   // ── Manual Triggers ─────────────────────────────────────────────
   
+  const handleAddToCart = async () => {
+    if (!variant) return;
+    
+    const success = await addItemToCart(variant.spinId, quantity);
+    if (success) {
+      setShowToast(true);
+    }
+  };
+
   // Refresh addresses when dropdown is opened
   useEffect(() => {
     if (showAddressDropdown) {
@@ -45,76 +66,131 @@ export default function ProductDetailScreen() {
     );
   }
 
-  const variant = product.variations[selectedVariantIndex];
   const selectedAddress = instamartState.addresses.find(a => a.id === instamartState.selectedAddressId);
 
   return (
     <View className="flex-1 bg-white">
+      <Stack.Screen options={{ headerShown: false }} />
+      
+      <Toast 
+        message="Added to cart" 
+        visible={showToast} 
+        onHide={() => setShowToast(false)} 
+      />
+
+      {/* Error feedback for stock issues, etc. */}
+      <Toast 
+        visible={!!instamartState.error} 
+        message={instamartState.error || ''} 
+        onHide={clearError} 
+      />
+
       {/* Header */}
-      <View className="flex-row items-center gap-3 p-4 border-b border-gray-100 bg-white shadow-sm z-50">
-        <Pressable
-          onPress={() => router.back()}
-          className="w-10 h-10 rounded-full bg-gray-50 border border-gray-200 flex items-center justify-center shadow-sm"
-        >
-          <ArrowLeft size={20} color="#1f2937" />
-        </Pressable>
-        <View className="flex-1">
-          <Text className="text-gray-500 text-xs font-medium uppercase tracking-wider">Instamart</Text>
-          <Text className="text-gray-900 font-bold text-base" numberOfLines={1}>Product Details</Text>
+      <View className="bg-white shadow-sm z-50">
+        <View className="flex-row items-center gap-3 p-4 border-b border-gray-100">
+          <Pressable
+            onPress={() => router.back()}
+            className="w-10 h-10 rounded-full bg-gray-50 border border-gray-200 flex items-center justify-center shadow-sm"
+          >
+            <ArrowLeft size={20} color="#1f2937" />
+          </Pressable>
+          <View className="flex-1">
+            <Text className="text-gray-500 text-xs font-medium uppercase tracking-wider">Instamart</Text>
+            <Text className="text-gray-900 font-bold text-base" numberOfLines={1}>Product Details</Text>
+          </View>
+          
+          {/* Address Selector */}
+          <Pressable 
+            onPress={() => setShowAddressDropdown(!showAddressDropdown)}
+            className="flex-row items-center gap-1 bg-gray-50 px-3 py-2 rounded-full border border-gray-200"
+          >
+            <MapPin size={14} color="#FF6B35" />
+            <Text className="text-gray-700 text-xs font-semibold max-w-[80px]" numberOfLines={1}>
+              {selectedAddress?.tag || 'Select Address'}
+            </Text>
+            <ChevronDown size={14} color="#9ca3af" />
+          </Pressable>
         </View>
-        
-        {/* Address Selector */}
-        <Pressable 
-          onPress={() => setShowAddressDropdown(!showAddressDropdown)}
-          className="flex-row items-center gap-1 bg-gray-50 px-3 py-2 rounded-full border border-gray-200"
-        >
-          <MapPin size={14} color="#FF6B35" />
-          <Text className="text-gray-700 text-xs font-semibold max-w-[80px]" numberOfLines={1}>
-            {selectedAddress?.tag || 'Select Address'}
-          </Text>
-          <ChevronDown size={14} color="#9ca3af" />
-        </Pressable>
+
+        {/* Multi-Product Tabs (Smart Navigation) */}
+        {state.processedResults.length > 1 && (
+          <View className="border-b border-gray-100">
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerClassName="px-4 py-2 gap-2"
+            >
+              {state.processedResults.map((result, index) => {
+                const isSelected = state.selectedIndex === index;
+                return (
+                  <Pressable
+                    key={result.externalId || index}
+                    onPress={() => {
+                      selectResult(index);
+                      setQuantity(1);
+                      setSelectedVariantIndex(0);
+                    }}
+                    hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
+                    className={`px-4 py-2 rounded-full border ${
+                      isSelected ? 'bg-orange-500 border-orange-500' : 'bg-gray-50 border-gray-200'
+                    }`}
+                  >
+                    <Text className={`text-xs font-bold ${isSelected ? 'text-white' : 'text-gray-600'}`}>
+                      {result.title}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Address Dropdown Overlay */}
+        {showAddressDropdown && (
+          <View className="absolute top-[72px] left-0 right-0 bg-white z-[100] shadow-2xl border-b border-gray-100 p-4">
+            <Text className="text-gray-900 font-bold mb-3 px-1">Deliver to</Text>
+            {instamartState.addresses.map((addr) => (
+              <Pressable
+                key={addr.id}
+                onPress={() => {
+                  setSelectedAddress(addr.id);
+                  setShowAddressDropdown(false);
+                }}
+                className={`flex-row items-center gap-3 p-3 rounded-xl mb-1 ${
+                  instamartState.selectedAddressId === addr.id ? 'bg-orange-50 border border-orange-100' : 'bg-white'
+                }`}
+              >
+                <View className={`w-8 h-8 rounded-full items-center justify-center ${
+                  instamartState.selectedAddressId === addr.id ? 'bg-orange-500' : 'bg-gray-100'
+                }`}>
+                  <MapPin size={16} color={instamartState.selectedAddressId === addr.id ? '#fff' : '#6b7280'} />
+                </View>
+                <View className="flex-1">
+                  <Text className={`font-bold ${instamartState.selectedAddressId === addr.id ? 'text-orange-900' : 'text-gray-900'}`}>
+                    {addr.tag}
+                  </Text>
+                  <Text className="text-gray-500 text-xs" numberOfLines={1}>{addr.line}</Text>
+                </View>
+                {instamartState.selectedAddressId === addr.id && (
+                  <View className="w-2 h-2 rounded-full bg-orange-500" />
+                )}
+              </Pressable>
+            ))}
+          </View>
+        )}
       </View>
 
-      {/* Address Dropdown Overlay */}
-      {showAddressDropdown && (
-        <View className="absolute top-[72px] left-0 right-0 bg-white z-[100] shadow-2xl border-b border-gray-100 p-4">
-          <Text className="text-gray-900 font-bold mb-3 px-1">Deliver to</Text>
-          {instamartState.addresses.map((addr) => (
-            <Pressable
-              key={addr.id}
-              onPress={() => {
-                setSelectedAddress(addr.id);
-                setShowAddressDropdown(false);
-              }}
-              className={`flex-row items-center gap-3 p-3 rounded-xl mb-1 ${
-                instamartState.selectedAddressId === addr.id ? 'bg-orange-50 border border-orange-100' : 'bg-white'
-              }`}
-            >
-              <View className={`w-8 h-8 rounded-full items-center justify-center ${
-                instamartState.selectedAddressId === addr.id ? 'bg-orange-500' : 'bg-gray-100'
-              }`}>
-                <MapPin size={16} color={instamartState.selectedAddressId === addr.id ? '#fff' : '#6b7280'} />
-              </View>
-              <View className="flex-1">
-                <Text className={`font-bold ${instamartState.selectedAddressId === addr.id ? 'text-orange-900' : 'text-gray-900'}`}>
-                  {addr.tag}
-                </Text>
-                <Text className="text-gray-500 text-xs" numberOfLines={1}>{addr.line}</Text>
-              </View>
-              {instamartState.selectedAddressId === addr.id && (
-                <View className="w-2 h-2 rounded-full bg-orange-500" />
-              )}
-            </Pressable>
-          ))}
-        </View>
-      )}
-
+      {/* Main Content */}
       <ScrollView contentContainerClassName="p-4 pb-32">
         {/* Product Image */}
-        <View className="bg-orange-50 rounded-2xl p-4 mb-6 items-center justify-center aspect-square">
+        <View className="bg-white rounded-2xl mb-6 items-center justify-center aspect-square overflow-hidden border border-gray-100 shadow-sm">
           {variant?.imageUrl ? (
-             <Text className="text-[120px]">📦</Text> // Placeholder for real image if URL exists but we use emoji for demo
+             <Image
+                source={{ uri: variant.imageUrl }}
+                style={{ width: '100%', height: '100%' }}
+                contentFit="contain"
+                transition={300}
+             />
           ) : (
             <Text className="text-[120px]">🍎</Text>
           )}
@@ -122,7 +198,7 @@ export default function ProductDetailScreen() {
 
         {/* Product Info */}
         <View className="mb-6">
-          <Text className="text-gray-600 text-sm mb-1">{product.brand}</Text>
+          <Text className="text-gray-600 text-sm mb-1 uppercase tracking-wider font-bold">{product.brand}</Text>
           <Text className="text-gray-900 text-2xl mb-3 font-bold">{product.name}</Text>
 
           <View className="flex-row items-center gap-3 mb-4">
@@ -139,15 +215,15 @@ export default function ProductDetailScreen() {
             )}
           </View>
 
-          <View className="self-start flex-row items-center gap-2 px-3 py-2 rounded-lg bg-orange-100 border border-orange-200 shadow-sm">
+          <View className="self-start flex-row items-center gap-2 px-3 py-2 rounded-lg bg-orange-50 border border-orange-100 shadow-sm">
             <Text className="text-lg">⚡</Text>
-            <Text className="text-[#FF6B35] text-sm font-medium">Delivery in 15-20 mins</Text>
+            <Text className="text-[#FF6B35] text-sm font-bold">Delivery in 15-20 mins</Text>
           </View>
         </View>
 
         {/* Variants */}
         <View className="mb-6">
-          <Text className="text-gray-900 mb-3 font-semibold">Select Variation</Text>
+          <Text className="text-gray-900 mb-3 font-bold text-base">Select Variation</Text>
           <View className="flex-row flex-wrap gap-3">
             {product.variations.map((v, index) => (
               <Pressable
@@ -159,7 +235,7 @@ export default function ProductDetailScreen() {
                     : 'bg-white border-gray-200'
                 }`}
               >
-                <Text className={`font-medium ${selectedVariantIndex === index ? 'text-white' : 'text-gray-700'}`}>
+                <Text className={`font-bold ${selectedVariantIndex === index ? 'text-white' : 'text-gray-700'}`}>
                   {v.quantity}
                 </Text>
               </Pressable>
@@ -167,30 +243,6 @@ export default function ProductDetailScreen() {
           </View>
         </View>
 
-        {/* Description */}
-        <View className="mb-6">
-          <Text className="text-gray-900 mb-2 font-semibold text-lg">Description</Text>
-          <Text className="text-gray-600 text-sm leading-6">
-            MAGGI 2-Minute Masala Noodles – your favourite snack made with the choicest quality spices and ingredients. Ready in just 2 minutes!
-          </Text>
-        </View>
-
-        {/* Frequently Bought Together */}
-        <View>
-          <Text className="text-gray-900 mb-3 font-semibold text-lg">Frequently Bought Together</Text>
-          <View className="flex-row gap-3">
-            <View className="flex-1 bg-white rounded-xl p-3 border border-gray-200 shadow-sm items-center">
-              <Text className="text-4xl mb-2">🥤</Text>
-              <Text className="text-gray-900 text-sm mb-1 font-medium">Coca Cola</Text>
-              <Text className="text-gray-700 text-xs">₹20</Text>
-            </View>
-            <View className="flex-1 bg-white rounded-xl p-3 border border-gray-200 shadow-sm items-center">
-              <Text className="text-4xl mb-2">🍪</Text>
-              <Text className="text-gray-900 text-sm mb-1 font-medium">Oreo Cookies</Text>
-              <Text className="text-gray-700 text-xs">₹30</Text>
-            </View>
-          </View>
-        </View>
       </ScrollView>
 
       {/* Sticky Bottom Bar */}
@@ -217,7 +269,7 @@ export default function ProductDetailScreen() {
 
           <Pressable 
             disabled={instamartState.isLoading || !variant?.isAvailable}
-            onPress={() => variant && addItemToCart(variant.spinId, quantity)}
+            onPress={handleAddToCart}
             className={`flex-1 py-4 rounded-xl shadow-md items-center justify-center flex-row gap-2 ${
               !variant?.isAvailable ? 'bg-gray-300' : 'bg-[#FF6B35]'
             }`}

@@ -1,12 +1,14 @@
 import React, { useMemo } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { ArrowLeft, MapPin, ChevronRight, Info } from 'lucide-react-native';
+import { ArrowLeft, MapPin, ChevronRight, Info, ShoppingBag } from 'lucide-react-native';
 import * as Icons from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDetection } from '@/src/store/detection-store';
 import { getDetectionStrategy } from '@/src/config/detection-config';
+import type { InstamartProduct } from '@/src/services/instamart';
 
 /**
  * Detection Results — native formSheet with snap detents.
@@ -78,24 +80,24 @@ export default function DetectionResultsScreen() {
           <ArrowLeft size={20} color="#333" />
         </Pressable>
         <Text style={styles.headerTitle}>
-          {results.length} {results.length === 1 ? 'Result' : 'Results'} Found
+          {state.processedResults.length} {state.processedResults.length === 1 ? 'Result' : 'Results'} Found
         </Text>
         <View style={{ width: 36 }} />
       </View>
 
-      {/* Horizontal chips for multiple detections */}
-      {results.length > 1 && (
+      {/* Horizontal tabs for matching products */}
+      {state.processedResults.length > 1 && (
         <View style={styles.chipsWrapper}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.chipsContent}
           >
-            {results.map((detection, index) => {
+            {state.processedResults.map((result, index) => {
               const isSelected = state.selectedIndex === index;
               return (
                 <Animated.View
-                  key={detection.id}
+                  key={result.externalId || index}
                   entering={FadeInUp.delay(index * 80).duration(300)}
                 >
                   <Pressable
@@ -106,13 +108,8 @@ export default function DetectionResultsScreen() {
                       style={[styles.chipLabel, isSelected && styles.chipLabelSelected]}
                       numberOfLines={1}
                     >
-                      {detection.normalizedText}
+                      {result.title}
                     </Text>
-                    <View style={[styles.chipBadge, isSelected && styles.chipBadgeSelected]}>
-                      <Text style={[styles.chipBadgeText, isSelected && styles.chipBadgeTextSelected]}>
-                        {Math.round(detection.confidence * 100)}%
-                      </Text>
-                    </View>
                   </Pressable>
                 </Animated.View>
               );
@@ -122,93 +119,92 @@ export default function DetectionResultsScreen() {
       )}
 
       {/* Main content */}
-      <ScrollView
-        showsVerticalScrollIndicator={false}
+      {/* Results List */}
+      <Animated.FlatList
+        data={state.processedResults}
+        keyExtractor={(item, index) => item.externalId || index.toString()}
         contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: Math.max(insets.bottom, 16) + 16 },
+          styles.resultsList,
+          { paddingBottom: Math.max(insets.bottom, 16) + 16 }
         ]}
-      >
-        {selectedProcessedResult && (
-          <Animated.View entering={FadeInUp.duration(350)}>
-            {/* Result card */}
-            <View style={styles.resultCard}>
-              <View style={styles.resultIconContainer}>
-                <IconComponent name={activeConfig?.icon ?? '📦'} size={32} color={activeConfig?.themeColor} />
-              </View>
+        showsVerticalScrollIndicator={false}
+        renderItem={({ item, index }) => {
+          const product = item.metadata?.product as InstamartProduct | undefined;
+          const variant = product?.variations[0];
+          const isSelected = state.selectedIndex === index;
 
-              <Text style={styles.resultName}>{selectedProcessedResult.title}</Text>
-              {selectedProcessedResult.subtitle && (
-                <Text style={styles.resultSubtitle}>{selectedProcessedResult.subtitle}</Text>
-              )}
-
-              {/* Confidence */}
-              <View style={styles.confidenceRow}>
-                <Text style={styles.confidenceLabel}>Match Score</Text>
-                <View style={styles.confidenceTrack}>
-                  <View
-                    style={[
-                      styles.confidenceFill,
-                      { 
-                        width: `${selectedProcessedResult.detection.confidence * 100}%`,
-                        backgroundColor: activeConfig?.themeColor ?? '#00D4AA'
-                      },
-                    ]}
-                  />
-                </View>
-                <Text style={styles.confidenceValue}>
-                  {Math.round(selectedProcessedResult.detection.confidence * 100)}%
-                </Text>
-              </View>
-
-              {/* Meta chips */}
-              <View style={styles.metaRow}>
-                <View style={styles.metaChip}>
-                  <MapPin size={12} color="#6b7280" />
-                  <Text style={styles.metaText}>Camera scan</Text>
-                </View>
-                <View style={styles.metaChip}>
-                  <Info size={12} color="#6b7280" />
-                  <Text style={styles.metaText}>
-                    {activeConfig?.label ?? 'Detection'}
-                  </Text>
-                </View>
-                <View style={styles.metaChip}>
-                  <Text style={styles.metaText}>
-                    {state.lastResponse?.metadata.provider ?? 'mock'}
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Actions */}
-            <Text style={styles.sectionTitle}>Quick Actions</Text>
-
-            {strategy?.getQuickActions(selectedProcessedResult).map((action, idx) => (
+          return (
+            <Animated.View
+              entering={FadeInUp.delay(200 + index * 100).duration(500)}
+              style={[styles.productCard, isSelected && styles.productCardSelected]}
+            >
               <Pressable 
-                key={idx}
-                style={styles.actionRow}
-                onPress={() => action.onPress(selectedProcessedResult)}
+                onPress={() => selectResult(index)}
+                style={styles.cardInner}
               >
-                <View style={[styles.actionIcon, { backgroundColor: action.backgroundColor ?? '#f3f4f6' }]}>
-                  <IconComponent name={action.icon} size={18} color={action.iconColor} />
+                {/* Image Container */}
+                <View style={styles.imageContainer}>
+                  {variant?.imageUrl ? (
+                    <Image
+                      source={{ uri: variant.imageUrl }}
+                      style={styles.productImage}
+                      contentFit="contain"
+                      transition={300}
+                    />
+                  ) : (
+                    <View style={styles.imagePlaceholder}>
+                      <Text style={styles.imageEmoji}>{index % 3 === 0 ? '🍜' : index % 3 === 1 ? '🥤' : '🍞'}</Text>
+                    </View>
+                  )}
+                  {variant && variant.mrp > variant.price && (
+                    <View style={styles.discountBadge}>
+                      <Text style={styles.discountText}>
+                        {Math.round(((variant.mrp - variant.price) / variant.mrp) * 100)}% OFF
+                      </Text>
+                    </View>
+                  )}
                 </View>
-                <View style={styles.actionContent}>
-                  <Text style={styles.actionTitle}>{action.label}</Text>
-                  <Text style={styles.actionSubtitle}>{selectedProcessedResult.title}</Text>
-                </View>
-                <ChevronRight size={16} color="#d1d5db" />
-              </Pressable>
-            ))}
 
-            {/* Timestamp */}
-            <Text style={styles.timestamp}>
-              Scanned at{' '}
-              {new Date(state.lastResponse?.metadata.timestamp ?? 0).toLocaleTimeString()}
+                {/* Product Info */}
+                <View style={styles.infoContainer}>
+                  <Text style={styles.brandText}>{product?.brand || 'Instamart'}</Text>
+                  <Text style={styles.productName} numberOfLines={2}>{product?.name || item.title}</Text>
+                  
+                  <View style={styles.priceRow}>
+                    <Text style={styles.priceText}>₹{variant?.price || 0}</Text>
+                    {variant && variant.mrp > variant.price && (
+                      <Text style={styles.mrpText}>₹{variant.mrp}</Text>
+                    )}
+                  </View>
+
+                  <Pressable 
+                    onPress={() => {
+                      selectResult(index);
+                      router.push(`/product/${item.externalId}` as any);
+                    }}
+                    style={styles.addButton}
+                  >
+                    <ShoppingBag size={14} color="#fff" />
+                    <Text style={styles.addButtonText}>View Details</Text>
+                  </Pressable>
+                </View>
+              </Pressable>
+            </Animated.View>
+          );
+        }}
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyIcon}>🔍</Text>
+            <Text style={styles.emptyTitle}>No products found</Text>
+            <Text style={styles.emptySubtitle}>
+              Try adjusting your camera or focusing on a different part of the item.
             </Text>
-          </Animated.View>
-        )}
-      </ScrollView>
+            <Pressable onPress={() => router.back()} style={styles.retryButton}>
+              <Text style={styles.retryText}>Try Again</Text>
+            </Pressable>
+          </View>
+        }
+      />
     </View>
   );
 }
@@ -356,96 +352,113 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     width: 72,
   },
-  confidenceTrack: {
-    flex: 1,
-    height: 5,
-    backgroundColor: '#e5e7eb',
-    borderRadius: 3,
-    overflow: 'hidden',
+  // ─── Results List ────────────────────────────────────────────────
+  resultsList: {
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+    gap: 16,
   },
-  confidenceFill: {
-    height: '100%',
-    backgroundColor: '#00D4AA',
-    borderRadius: 3,
-  },
-  confidenceValue: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#111827',
-    width: 34,
-    textAlign: 'right',
-    fontVariant: ['tabular-nums'],
-  },
-
-  // ─── Meta ────────────────────────────────────────────────────────
-  metaRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 4,
-    flexWrap: 'wrap',
-  },
-  metaChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#f3f4f6',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  metaText: {
-    fontSize: 11,
-    color: '#6b7280',
-  },
-
-  // ─── Actions ─────────────────────────────────────────────────────
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#111827',
-    letterSpacing: -0.1,
-    marginTop: 4,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    backgroundColor: '#f9fafb',
-    borderRadius: 14,
+  productCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: '#f3f4f6',
+    overflow: 'hidden',
     borderCurve: 'continuous',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
   },
-  actionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+  productCardSelected: {
+    borderColor: '#FF6B35',
+    backgroundColor: '#fffaf8',
+  },
+  cardInner: {
+    flexDirection: 'row',
+    padding: 12,
+    gap: 16,
+  },
+  imageContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 14,
+    backgroundColor: '#fff7f3',
     alignItems: 'center',
     justifyContent: 'center',
     borderCurve: 'continuous',
   },
-  actionContent: {
-    flex: 1,
-    gap: 2,
+  imageEmoji: {
+    fontSize: 48,
   },
-  actionTitle: {
+  discountBadge: {
+    position: 'absolute',
+    top: -4,
+    left: -4,
+    backgroundColor: '#00D4AA',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#ffffff',
+  },
+  discountText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  infoContainer: {
+    flex: 1,
+    justifyContent: 'space-between',
+    paddingVertical: 2,
+  },
+  brandText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#9ca3af',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  productName: {
     fontSize: 15,
     fontWeight: '600',
+    color: '#1f2937',
+    lineHeight: 20,
+    marginTop: 2,
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  priceText: {
+    fontSize: 18,
+    fontWeight: '700',
     color: '#111827',
   },
-  actionSubtitle: {
-    fontSize: 12,
-    color: '#6b7280',
-  },
-
-  // ─── Footer ──────────────────────────────────────────────────────
-  timestamp: {
-    fontSize: 11,
+  mrpText: {
+    fontSize: 13,
     color: '#9ca3af',
-    textAlign: 'center',
-    marginTop: 4,
+    textDecorationLine: 'line-through',
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#FF6B35',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    marginTop: 10,
+    borderCurve: 'continuous',
+  },
+  addButtonText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
   },
 
   // ─── Empty State ─────────────────────────────────────────────────
@@ -454,33 +467,49 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 32,
-    gap: 10,
+    marginTop: 80,
   },
   emptyIcon: {
-    fontSize: 44,
-    marginBottom: 4,
+    fontSize: 56,
+    marginBottom: 16,
   },
   emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700',
     color: '#111827',
+    marginBottom: 8,
   },
   emptySubtitle: {
     fontSize: 14,
     color: '#6b7280',
     textAlign: 'center',
     lineHeight: 20,
+    marginBottom: 24,
   },
   retryButton: {
-    backgroundColor: '#00D4AA',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 999,
-    marginTop: 8,
+    backgroundColor: '#FF6B35',
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 16,
+    shadowColor: '#FF6B35',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   retryText: {
     color: '#ffffff',
-    fontWeight: '600',
-    fontSize: 15,
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  productImage: {
+    width: '100%',
+    height: '100%',
+  },
+  imagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

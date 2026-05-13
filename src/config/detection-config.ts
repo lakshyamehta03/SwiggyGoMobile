@@ -20,7 +20,7 @@ export const DETECTION_STRATEGIES: Record<ScanningMode, IDetectionStrategy> = {
  */
 export const ENABLED_MODES: ScanningMode[] = [
   ScanningMode.INSTAMART,
-  ScanningMode.DINEOUT, // Uncomment to enable Dineout
+  // ScanningMode.DINEOUT, // Focused on Instamart
 ];
 
 /**

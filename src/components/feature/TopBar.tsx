@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Modal, FlatList } from 'react-native';
-import { Menu, Settings, MapPin, ChevronDown, Check } from 'lucide-react-native';
+import { Menu, Settings, MapPin, ChevronDown, Check, ShoppingBag } from 'lucide-react-native';
+import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScanningMode } from '@/src/types/detection';
 import { ENABLED_MODES, getDetectionStrategy } from '@/src/config/detection-config';
@@ -98,10 +99,19 @@ export function TopBar({ mode, onModeToggle }: TopBarProps) {
           </Pressable>
         </View>
 
-        {/* Right — Settings */}
+        {/* Right — Cart / Settings */}
         <View style={styles.sideColumn}>
-          <Pressable style={[styles.iconButton, { alignSelf: 'flex-end' }]} hitSlop={6}>
-            <Settings size={18} color="#ffffff" />
+          <Pressable 
+            onPress={() => router.push('/cart')}
+            style={[styles.iconButton, { alignSelf: 'flex-end' }]} 
+            hitSlop={6}
+          >
+            <ShoppingBag size={20} color="#ffffff" />
+            {instamartState.cart && instamartState.cart.items.length > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{instamartState.cart.items.length}</Text>
+              </View>
+            )}
           </Pressable>
         </View>
       </View>
@@ -297,5 +307,24 @@ const styles = StyleSheet.create({
   addressLine: {
     color: 'rgba(255, 255, 255, 0.6)',
     fontSize: 13,
+  },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#FF6B35',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(0, 0, 0, 0.45)',
+    paddingHorizontal: 2,
+  },
+  badgeText: {
+    color: '#ffffff',
+    fontSize: 9,
+    fontWeight: '800',
   },
 });

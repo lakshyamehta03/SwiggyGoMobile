@@ -6,9 +6,24 @@ import { instamartService } from '../../instamart';
 
 export class InstamartDetectionStrategy implements IDetectionStrategy {
   async process(ocrResponse: OCRResponse, options?: { addressId?: string }): Promise<ProcessedResult[]> {
-    // 1. Get query from OCR (use the first detection for now as primary)
-    const primaryQuery = ocrResponse.detections[0]?.normalizedText;
-    if (!primaryQuery || !options?.addressId) {
+    if (!options?.addressId || !ocrResponse.fullText.trim()) {
+      return ocrResponse.detections.map((d) => ({
+        detection: d,
+        title: d.normalizedText,
+        subtitle: 'Instamart • No products found',
+        metadata: { type: 'product' },
+      }));
+    }
+
+    // 1. Clean the full text (replace newlines with spaces and remove noise)
+    let unifiedQuery = ocrResponse.fullText
+      .replace(/\n/g, ' ')
+      .replace(/[^\w\s]/gi, '') // Remove special characters
+      .trim();
+
+    const products = await instamartService.search(unifiedQuery, options.addressId!);
+
+    if (products.length === 0) {
       return ocrResponse.detections.map((d) => ({
         detection: d,
         title: d.normalizedText,
@@ -17,14 +32,8 @@ export class InstamartDetectionStrategy implements IDetectionStrategy {
       }));
     }
 
-    // 2. Call search API
-    const products = await instamartService.search(primaryQuery, options.addressId);
-
-    // 3. Map to ProcessedResults
-    // If multiple products found, we map them. 
-    // Note: The OCR might have multiple detections, but we start with the primary one.
     return products.map((product) => ({
-      detection: ocrResponse.detections[0], // Associate with the primary detection
+      detection: ocrResponse.detections[0] || { id: 'root', normalizedText: unifiedQuery },
       title: product.name,
       subtitle: `${product.brand} • ₹${product.variations[0]?.price || 0}`,
       externalId: product.id,

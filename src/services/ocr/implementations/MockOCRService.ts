@@ -1,30 +1,12 @@
 import type {
   IOCRService,
+  OCRDetection,
   OCRRequest,
   OCRResponse,
-  OCRDetection,
-} from '../interfaces/OCRService';
-
-/**
- * Mock restaurant and product datasets for realistic simulation.
- */
-const MOCK_RESTAURANTS = [
-  { name: 'Barbeque Nation', cuisine: 'BBQ · North Indian · Buffet', rating: 4.3 },
-  { name: 'Pizza Hut', cuisine: 'Pizza · Italian · Fast Food', rating: 4.0 },
-  { name: 'Dominos Pizza', cuisine: 'Pizza · Fast Food', rating: 3.8 },
-  { name: 'Haldiram\'s', cuisine: 'North Indian · Sweets · Snacks', rating: 4.5 },
-  { name: 'McDonald\'s', cuisine: 'Burgers · Fast Food', rating: 3.9 },
-  { name: 'Cafe Coffee Day', cuisine: 'Cafe · Beverages · Snacks', rating: 4.1 },
-  { name: 'Subway', cuisine: 'Sandwich · Healthy · Fast Food', rating: 4.0 },
-];
+} from "../interfaces/OCRService";
 
 const MOCK_PRODUCTS = [
-  { name: 'Maggi 2-Minute Noodles', brand: 'Nestle', price: 14 },
-  { name: 'Coca-Cola 750ml', brand: 'Coca-Cola', price: 40 },
-  { name: 'Amul Butter 500g', brand: 'Amul', price: 270 },
-  { name: 'Lays Classic Chips', brand: 'PepsiCo', price: 20 },
-  { name: 'Red Bull Energy Drink', brand: 'Red Bull', price: 125 },
-  { name: 'Parle-G Biscuits', brand: 'Parle', price: 10 },
+  { name: "Maggi 2-Minute Masala Noodles", brand: "Nestle", price: 14 },
 ];
 
 function generateId(): string {
@@ -52,11 +34,11 @@ function randomInt(min: number, max: number): number {
  * Works fully in Expo Go — no native dependencies.
  */
 export class MockOCRService implements IOCRService {
-  readonly providerName = 'mock';
+  readonly providerName = "mock";
   readonly requiresNativeBuild = false;
 
   private simulateError = false;
-  private detectionMode: 'restaurant' | 'product' | 'mixed' = 'mixed';
+  private detectionMode: "restaurant" | "product" | "mixed" = "mixed";
 
   /** Configure the mock to simulate errors for testing */
   setSimulateError(simulate: boolean): void {
@@ -64,7 +46,7 @@ export class MockOCRService implements IOCRService {
   }
 
   /** Set detection mode: restaurant-only, product-only, or mixed */
-  setDetectionMode(mode: 'restaurant' | 'product' | 'mixed'): void {
+  setDetectionMode(mode: "restaurant" | "product" | "mixed"): void {
     this.detectionMode = mode;
   }
 
@@ -84,38 +66,26 @@ export class MockOCRService implements IOCRService {
       return {
         success: false,
         detections: [],
-        fullText: '',
+        fullText: "",
         metadata: {
-          provider: 'mock',
+          provider: "mock",
           processingTimeMs: Date.now() - startTime,
           timestamp: Date.now(),
           sourceImageUri: request.imageUri,
         },
-        error: 'Mock OCR: Simulated recognition failure. Please try again.',
+        error: "Mock OCR: Simulated recognition failure. Please try again.",
       };
     }
 
     // Generate 1–4 detections
-    const numDetections = Math.min(
-      request.maxResults ?? 4,
-      randomInt(1, 4)
-    );
+    const numDetections = Math.min(request.maxResults ?? 4, randomInt(1, 4));
 
     const detections: OCRDetection[] = [];
 
     for (let i = 0; i < numDetections; i++) {
-      const isRestaurant =
-        this.detectionMode === 'restaurant' ||
-        (this.detectionMode === 'mixed' && Math.random() > 0.4);
-
       let rawText: string;
-      if (isRestaurant) {
-        const restaurant = MOCK_RESTAURANTS[randomInt(0, MOCK_RESTAURANTS.length - 1)];
-        rawText = restaurant.name;
-      } else {
-        const product = MOCK_PRODUCTS[randomInt(0, MOCK_PRODUCTS.length - 1)];
-        rawText = product.name;
-      }
+      const product = MOCK_PRODUCTS[randomInt(0, MOCK_PRODUCTS.length - 1)];
+      rawText = product.name;
 
       // Simulate slight OCR imperfections for realism
       const confidence = randomFloat(0.65, 0.98);
@@ -129,7 +99,7 @@ export class MockOCRService implements IOCRService {
       detections.push({
         id: generateId(),
         rawText,
-        normalizedText: rawText.trim().replace(/\s+/g, ' '),
+        normalizedText: rawText.trim().replace(/\s+/g, " "),
         confidence: Math.round(confidence * 100) / 100,
         boundingBox: {
           x: Math.round(boxX * 100) / 100,
@@ -137,21 +107,21 @@ export class MockOCRService implements IOCRService {
           width: Math.round(boxWidth * 100) / 100,
           height: Math.round(boxHeight * 100) / 100,
         },
-        language: 'en',
+        language: "en",
       });
     }
 
     // Sort by confidence (highest first)
     detections.sort((a, b) => b.confidence - a.confidence);
 
-    const fullText = detections.map((d) => d.normalizedText).join('\n');
+    const fullText = detections.map((d) => d.normalizedText).join("\n");
 
     return {
       success: true,
       detections,
       fullText,
       metadata: {
-        provider: 'mock',
+        provider: "mock",
         processingTimeMs: Date.now() - startTime,
         timestamp: Date.now(),
         sourceImageUri: request.imageUri,

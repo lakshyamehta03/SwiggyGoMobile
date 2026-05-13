@@ -104,4 +104,14 @@ export const instamartClient = {
     });
     return res.json();
   },
+  /**
+   * Update the entire cart with a list of items
+   */
+  async updateCart(items: { spinId: string; quantity: number }[], addressId: string): Promise<InstamartCart> {
+    const res = await authenticatedFetch(endpoints.instamartUpdateCart, {
+      method: 'POST',
+      body: JSON.stringify({ items, addressId }),
+    });
+    return res.json();
+  },
 };

@@ -35,6 +35,7 @@ export const instamartService = {
     
     try {
       const response = await instamartClient.searchProducts(query, addressId);
+      console.log('[InstamartService] Search response:', JSON.stringify(response, null, 2));
       return response.products;
     } catch (error) {
       this.handleError(error, `Failed to search for "${query}"`);
@@ -49,6 +50,17 @@ export const instamartService = {
     try {
       return await instamartClient.getCart(addressId);
     } catch (error) {
+      // If backend returns 500 (likely "Cart not found" or "Session expired" which requires update_cart)
+      // we return a clean empty cart DTO to prevent UI crashes.
+      if (error instanceof InstamartApiError && error.statusCode === 500) {
+        return {
+          total: '0',
+          items: [],
+          billBreakdown: [],
+          toPay: '0',
+          address: null
+        };
+      }
       this.handleError(error, 'Failed to fetch cart');
       return null;
     }
@@ -62,6 +74,18 @@ export const instamartService = {
       return await instamartClient.addToCart({ spinId, quantity, addressId });
     } catch (error) {
       this.handleError(error, 'Failed to add item to cart');
+      return null;
+    }
+  },
+
+  /**
+   * Update entire cart
+   */
+  async updateCart(items: { spinId: string; quantity: number }[], addressId: string): Promise<InstamartCart | null> {
+    try {
+      return await instamartClient.updateCart(items, addressId);
+    } catch (error) {
+      this.handleError(error, 'Failed to update cart');
       return null;
     }
   },

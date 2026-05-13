@@ -23,6 +23,9 @@ const SLIDER_HEIGHT = 24;
 const SLIDER_TRACK_HEIGHT = 3;
 const SLIDER_THUMB_SIZE = 18;
 
+const AnimatedView = Animated.createAnimatedComponent(View);
+const AnimatedText = Animated.createAnimatedComponent(Text);
+
 interface ScanOverlayProps {
   /** Whether the scanner is actively processing */
   isScanning?: boolean;
@@ -44,8 +47,8 @@ export function ScanOverlay({ isScanning = false, zoom }: ScanOverlayProps) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
   // Scan box dimensions — responsive
-  const boxWidth = screenWidth * 0.75;
-  const boxHeight = screenHeight * 0.18;
+  const boxWidth = screenWidth * 0.68;
+  const boxHeight = boxWidth * 1.05; // Slightly tall but more compact
   const boxLeft = (screenWidth - boxWidth) / 2;
   const boxTop = (screenHeight - boxHeight) / 2 - 40;
 
@@ -99,15 +102,13 @@ export function ScanOverlay({ isScanning = false, zoom }: ScanOverlayProps) {
 
   // Active track fill
   const fillStyle = useAnimatedStyle(() => {
-    const progress = zoom.value / ZOOM_MAX;
     return {
-      width: `${progress * 100}%`,
+      width: (zoom.value / ZOOM_MAX) * sliderWidth,
     };
   });
 
   // Zoom label
   const zoomLabelStyle = useAnimatedStyle(() => {
-    const pct = Math.round((zoom.value / ZOOM_MAX) * 100);
     return {
       opacity: zoom.value > 0.01 ? 1 : 0.5,
     };
@@ -171,23 +172,23 @@ export function ScanOverlay({ isScanning = false, zoom }: ScanOverlayProps) {
         {/* Labels */}
         <View style={styles.sliderLabels}>
           <Text style={styles.sliderLabel}>1×</Text>
-          <Animated.Text style={[styles.sliderLabel, zoomLabelStyle]}>
-            Zoom
-          </Animated.Text>
+          <AnimatedView style={zoomLabelStyle}>
+            <Text style={styles.sliderLabel}>Zoom</Text>
+          </AnimatedView>
           <Text style={styles.sliderLabel}>5×</Text>
         </View>
 
         {/* Track + Thumb */}
         <GestureDetector gesture={sliderComposed}>
-          <Animated.View style={styles.sliderTrackContainer}>
+          <View style={styles.sliderTrackContainer}>
             {/* Background track */}
             <View style={styles.sliderTrack}>
               {/* Active fill */}
-              <Animated.View style={[styles.sliderFill, fillStyle]} />
+              <AnimatedView style={[styles.sliderFill, fillStyle]} />
             </View>
             {/* Thumb */}
-            <Animated.View style={[styles.sliderThumb, thumbStyle]} />
-          </Animated.View>
+            <AnimatedView style={[styles.sliderThumb, thumbStyle]} />
+          </View>
         </GestureDetector>
       </View>
 
@@ -203,7 +204,7 @@ export function ScanOverlay({ isScanning = false, zoom }: ScanOverlayProps) {
         pointerEvents="none"
       >
         {/* Corner brackets */}
-        <Animated.View style={cornerPulseStyle}>
+        <AnimatedView style={cornerPulseStyle}>
           <View style={[styles.corner, styles.cornerTL]} />
           <View style={[styles.corner, styles.cornerTL, styles.cornerH]} />
           <View style={[styles.corner, styles.cornerTR]} />
@@ -212,17 +213,17 @@ export function ScanOverlay({ isScanning = false, zoom }: ScanOverlayProps) {
           <View style={[styles.corner, styles.cornerBL, styles.cornerH]} />
           <View style={[styles.corner, styles.cornerBR]} />
           <View style={[styles.corner, styles.cornerBR, styles.cornerH]} />
-        </Animated.View>
+        </AnimatedView>
 
         {/* Scanning line */}
-        <Animated.View style={[styles.scanLine, scanLineStyle]} />
+        <AnimatedView style={[styles.scanLine, scanLineStyle]} />
       </View>
 
       {/* Instruction text */}
       <View
         style={{
           position: 'absolute',
-          top: boxTop + boxHeight + 20,
+          top: boxTop + boxHeight + 16,
           left: 0,
           right: 0,
           alignItems: 'center',
@@ -283,7 +284,6 @@ const styles = StyleSheet.create({
     borderColor: ACCENT,
     // Center vertically on the track
     top: (SLIDER_HEIGHT - SLIDER_THUMB_SIZE) / 2,
-    boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
   },
 
   // ─── Corners ─────────────────────────────────────────────────────
@@ -308,9 +308,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 8,
     right: 8,
-    height: 2,
+    height: 3,
     backgroundColor: ACCENT,
-    borderRadius: 1,
+    borderRadius: 2,
     top: 0,
   },
 
